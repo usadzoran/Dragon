@@ -1,0 +1,326 @@
+<!doctype html>
+
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>متجر جزائري - Demo</title>
+  <style>
+    :root{
+      --green:#1e8e3e;
+      --gold:#d4af37;
+      --muted:#f5f5f5;
+      --card-shadow: 0 6px 18px rgba(0,0,0,0.08);
+      font-family: 'Segoe UI', Tahoma, system-ui, -apple-system, 'Noto Naskh Arabic', sans-serif;
+    }
+    body{margin:0;background:var(--muted);color:#222}
+    header{background:#fff;padding:18px 20px;box-shadow:0 2px 6px rgba(0,0,0,0.05);display:flex;align-items:center;justify-content:space-between}
+    .brand{display:flex;align-items:center;gap:12px}
+    .brand h1{margin:0;font-size:20px;color:var(--green)}
+    .container{max-width:1100px;margin:24px auto;padding:0 16px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px}
+    .card{background:#fff;border-radius:12px;padding:12px;box-shadow:var(--card-shadow);display:flex;flex-direction:column}
+    .card img{width:100%;height:220px;object-fit:cover;border-radius:8px}
+    .card .title{font-weight:600;margin:8px 0}
+    .price{color:var(--green);font-weight:700}
+    .buttons{margin-top:auto;display:flex;gap:8px}
+    button{border:0;padding:10px 12px;border-radius:8px;cursor:pointer}
+    .btn-cart{background:#eee}
+    .btn-buy{background:var(--green);color:#fff}
+    .cart-btn{background:var(--gold);color:#fff;padding:8px 10px;border-radius:8px}
+    /* modal */
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,0.4);display:none;align-items:center;justify-content:center;padding:20px}
+    .modal .panel{background:#fff;border-radius:12px;max-width:900px;width:100%;padding:18px;box-shadow:var(--card-shadow);}
+    .row{display:flex;gap:12px}
+    .col{flex:1}
+    .options{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+    .option{padding:8px 12px;border-radius:8px;border:1px solid #ddd;cursor:pointer}
+    .option.selected{border-color:var(--green);box-shadow:0 4px 10px rgba(30,142,62,0.12)}
+    form .field{margin-bottom:10px}
+    label{display:block;margin-bottom:6px}
+    input,select{width:100%;padding:10px;border-radius:8px;border:1px solid #ddd}
+    footer{padding:18px;text-align:center;color:#666}
+    @media(max-width:700px){.row{flex-direction:column}}
+  </style>
+  <!-- Supabase JS CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <img src="https://cdn-icons-png.flaticon.com/512/3081/3081678.png" alt="logo" width="42" height="42">
+      <h1>ShowMe - المتجر الجزائري</h1>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="cart-btn" id="open-cart">سلة (<span id="cart-count">0</span>)</button>
+    </div>
+  </header>  <main class="container">
+    <section>
+      <h2>المنتجات</h2>
+      <div class="grid" id="products-grid"></div>
+    </section>
+  </main>  <!-- Product Modal -->  <div class="modal" id="product-modal">
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h3 id="modal-title"></h3>
+        <button onclick="closeModal()">✖</button>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div class="col" style="max-width:420px">
+          <img id="modal-img" src="" alt="" style="width:100%;border-radius:8px;height:360px;object-fit:cover">
+        </div>
+        <div class="col">
+          <p id="modal-desc"></p>
+          <p class="price" id="modal-price"></p><div>
+        <label>اللون</label>
+        <div id="colors" class="options"></div>
+      </div>
+
+      <div>
+        <label>المقاس</label>
+        <div id="sizes" class="options"></div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn-cart" id="add-to-cart">أضف إلى السلة</button>
+        <button class="btn-buy" id="buy-now">اشترِ الآن</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+  </div>  <!-- Cart / Checkout Modal -->  <div class="modal" id="cart-modal">
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h3>سلة التسوق</h3>
+        <button onclick="closeCart()">✖</button>
+      </div>
+      <div id="cart-contents" style="margin-top:12px"></div><hr style="margin:12px 0">
+  <div id="checkout-area">
+    <h4>تأكيد وملء المعلومات</h4>
+    <form id="checkout-form">
+      <div class="row">
+        <div class="col field">
+          <label>الاسم واللقب</label>
+          <input type="text" id="full_name" required>
+        </div>
+        <div class="col field">
+          <label>رقم الهاتف</label>
+          <input type="text" id="phone" required>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col field">
+          <label>الولاية</label>
+          <select id="wilaya" required></select>
+        </div>
+        <div class="col field">
+          <label>البلدية</label>
+          <input type="text" id="baladia" placeholder="أكتب البلدية" required>
+        </div>
+      </div>
+
+      <p>سعر المنتجات: <span id="subtotal">0</span> د.ج</p>
+      <p>ثمن التوصيل: <span id="delivery">0</span> د.ج</p>
+      <p style="font-weight:700">الإجمالي: <span id="total">0</span> د.ج</p>
+
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button type="submit" class="btn-buy">تأكيد الطلب</button>
+        <button type="button" onclick="continueShopping()" class="btn-cart">الاستمرار بالتسوق</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="order-success" style="display:none;margin-top:12px">
+    <p>✅ تم استلام طلبك! شكرا لك.</p>
+    <button onclick="closeCart()" class="btn-cart">العودة للرئيسية</button>
+  </div>
+</div>
+
+  </div>  <footer>
+    Built for demo • Replace SUPABASE_URL and SUPABASE_ANON_KEY with your project's values.
+  </footer><script>
+// ---------- CONFIG - replace these with your Supabase project URL and ANON key ----------
+const SUPABASE_URL = 'https://YOUR-SUPABASE-URL.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+// -------------------------------------------------------------------------------------
+
+const supabase = supabaseJs.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// sample products
+const products = [
+  {id:1,name:'قميص كلاسيكي',price:2500,img:'https://images.unsplash.com/photo-1520975913572-1b3b1f3b7fcd',colors:['أزرق','أسود','أبيض'],sizes:['S','M','L','XL'],desc:'قميص مريح وعالي الجودة.'},
+  {id:2,name:'حذاء رياضي',price:5200,img:'https://images.unsplash.com/photo-1519744792095-2f2205e87b6f',colors:['أبيض','أسود'],sizes:['40','41','42','43'],desc:'حذاء خفيف ومثالي للمشي.'},
+  {id:3,name:'جاكيت شتوي',price:7800,img:'https://images.unsplash.com/photo-1600180758890-9d1f5e1b6c4b',colors:['رمادي','أسود','بني'],sizes:['M','L','XL'],desc:'دفء وأناقة للموسم البارد.'}
+];
+
+let cart = [];
+let currentProduct = null;
+let selectedColor = null;
+let selectedSize = null;
+
+function q(sel){return document.querySelector(sel)}
+function qq(sel){return document.querySelectorAll(sel)}
+
+function renderProducts(){
+  const grid = q('#products-grid');
+  grid.innerHTML = '';
+  products.forEach(p=>{
+    const card = document.createElement('div');card.className='card';
+    card.innerHTML = `
+      <img src="${p.img}&w=900&q=80" alt="${p.name}">
+      <div class="title">${p.name}</div>
+      <div class="price">${p.price} د.ج</div>
+      <div class="buttons">
+        <button class="btn-cart" onclick="openProduct(${p.id})">عرض</button>
+        <button class="btn-buy" onclick="buyNowProduct(${p.id})">اشترِ الآن</button>
+      </div>
+    `;
+    grid.appendChild(card);
+  })
+}
+
+function openProduct(id){
+  const p = products.find(x=>x.id===id);
+  currentProduct = p; selectedColor = null; selectedSize = null;
+  q('#modal-title').innerText = p.name;
+  q('#modal-img').src = p.img+ '&w=1200&q=80';
+  q('#modal-desc').innerText = p.desc;
+  q('#modal-price').innerText = p.price + ' د.ج';
+  // render colors
+  const colorsEl = q('#colors'); colorsEl.innerHTML='';
+  p.colors.forEach(c=>{
+    const b = document.createElement('div'); b.className='option'; b.innerText = c;
+    b.onclick = ()=>{ selectColor(b,c) };
+    colorsEl.appendChild(b);
+  })
+  // sizes
+  const sizesEl = q('#sizes'); sizesEl.innerHTML='';
+  p.sizes.forEach(s=>{
+    const b = document.createElement('div'); b.className='option'; b.innerText = s;
+    b.onclick = ()=>{ selectSize(b,s) };
+    sizesEl.appendChild(b);
+  })
+
+  q('#product-modal').style.display='flex';
+}
+function closeModal(){ q('#product-modal').style.display='none' }
+
+function selectColor(el,val){
+  qq('#colors .option').forEach(x=>x.classList.remove('selected'));
+  el.classList.add('selected'); selectedColor = val;
+}
+function selectSize(el,val){
+  qq('#sizes .option').forEach(x=>x.classList.remove('selected'));
+  el.classList.add('selected'); selectedSize = val;
+}
+
+function buyNowProduct(id){
+  openProduct(id);
+  // after opening, trigger buy now to open cart modal with single item
+  q('#buy-now').onclick = ()=>{
+    addToCart(id,true);
+  }
+}
+
+function addToCart(id,checkout=false){
+  const p = products.find(x=>x.id===id);
+  // if no selection for color/size, pick first
+  const color = selectedColor || p.colors[0];
+  const size = selectedSize || p.sizes[0];
+  const item = {id:Date.now(),product_id:p.id,product_name:p.name,price:p.price,color,size,qty:1}
+  cart.push(item);
+  updateCartCount();
+  closeModal();
+  if(checkout) openCart();
+}
+
+function updateCartCount(){ q('#cart-count').innerText = cart.length }
+
+// Cart modal
+function openCart(){
+  renderCart();
+  q('#cart-modal').style.display='flex';
+}
+function closeCart(){ q('#cart-modal').style.display='none' }
+function continueShopping(){ closeCart() }
+
+function renderCart(){
+  const el = q('#cart-contents');
+  if(cart.length===0){ el.innerHTML='<p>السلة فارغة</p>'; q('#checkout-area').style.display='none'; return; }
+  q('#checkout-area').style.display='block';
+  el.innerHTML='';
+  let subtotal=0;
+  cart.forEach((it,idx)=>{
+    subtotal += it.price * it.qty;
+    const row = document.createElement('div');
+    row.style.display='flex';row.style.justifyContent='space-between';row.style.alignItems='center';row.style.marginBottom='8px';
+    row.innerHTML = `<div><strong>${it.product_name}</strong> - ${it.color} - ${it.size}</div><div>${it.price} د.ج x ${it.qty} <button onclick="removeItem(${idx})">✖</button></div>`;
+    el.appendChild(row);
+  })
+  const delivery = calculateDelivery(subtotal);
+  q('#subtotal').innerText = subtotal;
+  q('#delivery').innerText = delivery;
+  q('#total').innerText = subtotal + delivery;
+}
+
+function removeItem(idx){ cart.splice(idx,1); renderCart(); updateCartCount(); }
+
+function calculateDelivery(subtotal){
+  // example: free delivery over 10000, otherwise flat 700 DZD
+  if(subtotal>=10000) return 0;
+  return 700;
+}
+
+// populate wilayas
+const wilayas = [
+  "Adrar","Chlef","Laghouat","Oum El Bouaghi","Batna","Béjaïa","Biskra","Béchar","Blida","Bouira","Tamanrasset","Tébessa","Tlemcen","Tiaret","Tizi Ouzou","Algiers","Djelfa","Jijel","Sétif","Saïda","Skikda","Sidi Bel Abbès","Annaba","Guelma","Constantine","Médéa","Mostaganem","MSila","Mascara","Ouargla","Oran","El Bayadh","Illizi","Bordj Bou Arreridj","Boumerdès","El Tarf","Tindouf","Tissemsilt","El Oued","Khenchela","Souk Ahras","Tipaza","Mila","Aïn Defla","Naâma","Aïn Témouchent","Ghardaïa","Relizane"
+];
+function fillWilayas(){
+  const sel = q('#wilaya'); sel.innerHTML='';
+  wilayas.forEach(w=>{ const o = document.createElement('option'); o.value=w; o.innerText=w; sel.appendChild(o) })
+}
+
+// checkout submit -> send to Supabase
+q('#checkout-form').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  if(cart.length===0) return alert('سلة التسوق فارغة');
+  const full_name = q('#full_name').value.trim();
+  const phone = q('#phone').value.trim();
+  const wilaya = q('#wilaya').value;
+  const baladia = q('#baladia').value.trim();
+  const subtotal = Number(q('#subtotal').innerText || '0');
+  const delivery = Number(q('#delivery').innerText || '0');
+  const total = subtotal + delivery;
+
+  // Prepare payload: for simplicity, create one order per cart item (alternatively store JSON)
+  try{
+    // Convert cart items into rows
+    const rows = cart.map(item=>({
+      full_name, phone, wilaya, baladia,
+      product_name: item.product_name, color: item.color, size: item.size,
+      price: item.price, delivery_fee: Math.round(delivery / cart.length), total: Math.round((item.price) + Math.round(delivery / cart.length))
+    }));
+
+    const {data, error} = await supabase.from('orders').insert(rows);
+    if(error) throw error;
+    // success
+    q('#order-success').style.display='block';
+    q('#checkout-area').style.display='none';
+    cart = [];
+    updateCartCount();
+  }catch(err){
+    console.error(err);
+    alert('حدث خطأ أثناء إرسال الطلب. تأكد من إعداد Supabase ومطابقة اسم الجدول والأعمدة.');
+  }
+});
+
+// helpers
+q('#open-cart').addEventListener('click', openCart);
+
+// initial
+renderProducts(); fillWilayas();
+
+</script></body>
+    </html>
