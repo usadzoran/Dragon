@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <title>لوحة صاحب المطعم — RSali</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
+  <style>
+    body{ font-family:Tahoma, sans-serif; background:#f8fff6; padding:20px; }
+    .wrap{ max-width:1100px; margin:0 auto; display:flex; gap:20px; }
+    .col{ background:white; padding:12px; border-radius:10px; box-shadow:0 8px 30px rgba(0,0,0,0.06); flex:1 }
+    .btn { padding:8px 12px; background:#0ea5a4; color:white; border:none; border-radius:8px; cursor:pointer }
+    input, textarea { width:100%; padding:8px; margin-top:8px; border-radius:6px; border:1px solid #ddd; box-sizing:border-box }
+    .order { border-bottom:1px dashed #eee; padding:8px 0; }
+  </style>
+</head>
+<body>
+  <h2>لوحة صاحب المطعم</h2>
+  <div class="wrap">
+    <div class="col" style="flex-basis:45%">
+      <h3>الطلبات الجديدة</h3>
+      <div id="ordersList">جاري الاتصال...</div>
+    </div>
+
+    <div class="col" style="flex-basis:55%">
+      <h3>إدارة المأكولات</h3>
+      <div>
+        <input id="meal_name" placeholder="اسم الوجبة">
+        <input id="meal_price" placeholder="السعر (DA)">
+        <input id="meal_image" placeholder="رابط الصورة">
+        <textarea id="meal_desc" placeholder="وصف (اختياري)"></textarea>
+        <button id="addMealBtn" class="btn">أضف وجبة</button>
+      </div>
+
+      <h4 style="margin-top:18px">قائمة الوجبات</h4>
+      <div id="mealsList">تحميل...</div>
+    </div>
+  </div>
+
+<script>
+  const SUPA_URL = "https://vhvmwshgzxunosucwrnz.supabase.co";
+  const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZodm13c2hnenh1bm9zdWN3cm56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMTg2OTIsImV4cCI6MjA3ODc5NDY5Mn0.ow3rgxsKBPY5Av-FX_z5URPO6gtdmnLyb7ZIR4IbFTU";
+  const supabase = supabaseJs.createClient(SUPA_URL, SUPA_KEY);
+
+  // get restaurant_id from query
+  const urlParams = new URLSearchParams(window.location.search);
+  const restaurantId = urlParams.get("restaurant_id");
+  if(!restaurantId){ document.body.innerHTML = "<p>لم يتم تمرير restaurant_id في الرابط.</p>"; throw new Error("restaurant_id required"); }
+
+  const ordersList = document.getElementById("ordersList");
+  const mealsList = document.getElementById("mealsList");
+
+  // load existing orders for this restaurant
+  async function loadOrders(){
+    ordersList.innerHTML = "جاري التحميل...";
+    const { data, error } = await supabase.from("orders").select("*").eq("restaurant_id", restaurantId).order("created_at",{ascending:false});
+    if(error){ ordersList.innerText = "خطأ في جلب الطلبات"; console.error(error); return; }
+    renderOrders(data);
+  }
+
+  function renderOrders(rows){
+    if(!rows.length) { ordersList.innerHTML = "<div class='small'>لا توجد طلبات حتى الآن</div>"; return; }
+    ordersList.innerHTML = "";
+    rows.forEach(o => {
+      const el = document.createElement("div");
+      el.className = "order";
+      el.innerHTML = `
+        <strong>طلب من ${o.customer_name}</strong><br>
+        ${o.customer_phone} — ${o.delivery_address}<br>
+        المجموع: ${Number(o.total).toFixed(2)} DA — <em>${o.status}</em><br>
+        <button class="btn markBtn" data-id="${o.id}">وضع ب قيد التحضير</button>
+        <button class="btn" style="background:#ff6b35" data-id="view-${o.id}">عرض التفاصيل</button>
+      `;
+      ordersList.appendChild(el);
+      el.querySelectorAll(".markBtn").forEach(b => {
+        b.addEventListener("click", ()=> changeStatus(b.dataset.id, "preparing"));
+      });
+      el.querySelector(`[data-id="view-${o.id}"]`).addEventListener("click", ()=> viewOrderItems(o.id));
+    });
+  }
+
+  async function changeStatus(orderId, status){
+    const { error } = await supabase.from("orders").update({status}).eq("id", orderId);
+    if(error){ alert("خطأ"); console.error(error); return; }
+    await loadOrders();
+  }
+
+  async function viewOrderItems(orderId){
+    const { data, error } = await supabase.from("order_items").select("*").eq("order_id", orderId);
+    if(error){ alert("خطأ في جلب تفاصيل"); console.error(error); return; }
+    alert("تفاصيل الطلب:\\n" + data.map(i => `${i.meal_name} x${i.quantity} — ${Number(i.unit_price).toFixed(2)} DA`).join("\\n"));
+  }
+
+  // Realtime subscription for notifications/orders
+  async function setupRealtime(){
+    // Listen to notifications table for this restaurant
+    supabase.channel('public:notifications')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `restaurant_id=eq.${restaurantId}` }, payload => {
+        console.log('new notification', payload);
+        // whenever notification arrives, reload orders (or fetch details)
+        loadOrders();
+      })
+      .subscribe();
+  }
+
+  // Meals management
+  async function loadMeals(){
+    mealsList.innerHTML = "جاري التحميل...";
+    const { data, error } = await supabase.from("meals").select("*").eq("restaurant_id", restaurantId).order("created_at",{ascending:false});
+    if(error){ mealsList.innerText = "خطأ"; console.error(error); return; }
+    mealsList.innerHTML = "";
+    data.forEach(m => {
+      const el = document.createElement("div");
+      el.className = "meal";
+      el.style.borderBottom = "1px dashed #eee";
+      el.style.padding = "8px 0";
+      el.innerHTML = `<strong>${m.name}</strong> — ${Number(m.price).toFixed(2)} DA
+        <button class="btn del" data-id="${m.id}" style="background:#ff6b35;margin-left:8px">حذف</button>`;
+      mealsList.appendChild(el);
+      el.querySelector(".del").addEventListener("click", ()=> deleteMeal(m.id));
+    });
+  }
+
+  document.getElementById("addMealBtn").addEventListener("click", async ()=>{
+    const name = document.getElementById("meal_name").value.trim();
+    const price = parseFloat(document.getElementById("meal_price").value);
+    const img = document.getElementById("meal_image").value.trim();
+    const desc = document.getElementById("meal_desc").value.trim();
+    if(!name || !price){ alert("عبي الاسم و السعر"); return; }
+    const { error } = await supabase.from("meals").insert([{ restaurant_id: restaurantId, name, price, image_url: img, description: desc }]);
+    if(error){ alert("خطأ في الإضافة"); console.error(error); return; }
+    document.getElementById("meal_name").value = "";
+    document.getElementById("meal_price").value = "";
+    document.getElementById("meal_image").value = "";
+    document.getElementById("meal_desc").value = "";
+    loadMeals();
+  });
+
+  async function deleteMeal(id){
+    if(!confirm("تأكد من الحذف؟")) return;
+    const { error } = await supabase.from("meals").delete().eq("id", id);
+    if(error){ alert("خطأ"); console.error(error); return; }
+    loadMeals();
+  }
+
+  // init
+  loadOrders();
+  loadMeals();
+  setupRealtime();
+</script>
+</body>
+</html>
