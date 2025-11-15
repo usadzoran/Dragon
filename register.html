@@ -1,71 +1,114 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar">
 <head>
-  <meta charset="utf-8" />
-  <title>تسجيل صاحب المطعم — RSali</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
+  <meta charset="UTF-8">
+  <title>RSali - تسجيل مطعم</title>
   <style>
-    body{ font-family:Tahoma, sans-serif; background:#f6fbf9; padding:40px; }
-    .box{ max-width:480px; margin:0 auto; background:white; padding:18px; border-radius:10px; box-shadow:0 8px 30px rgba(0,0,0,0.06) }
-    input { width:100%; padding:10px; margin-top:8px; border-radius:6px; border:1px solid #ddd; }
-    .btn { margin-top:12px; padding:10px 14px; background:#06a77d; color:white; border:none; border-radius:8px; cursor:pointer }
-    .small { font-size:13px; color:#666 }
+    body {
+      font-family: sans-serif;
+      background: #fafafa;
+      padding: 20px;
+      direction: rtl;
+    }
+    .box {
+      width: 350px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px #0002;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      margin: 6px 0;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      background: #ff7b00;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 17px;
+      cursor: pointer;
+    }
+    .msg {
+      margin-top: 10px;
+      font-size: 15px;
+      color: #444;
+    }
   </style>
 </head>
 <body>
-  <div class="box">
-    <h2>تسجيل صاحب المطعم</h2>
-    <p class="small">لديك رابك؟ أدخله ثم عبي البيانات</p>
 
-    <input id="token" placeholder="رابك (token) — مثال: ?token=..." />
-    <input id="owner_name" placeholder="اسم صاحب المطعم" />
-    <input id="owner_email" placeholder="البريد الإلكتروني" />
-    <input id="restaurant_name" placeholder="اسم المطعم" />
-    <input id="restaurant_image" placeholder="رابط صورة المطعم (URL)" />
-    <button id="registerBtn" class="btn">تسجيل</button>
-    <p id="msg" class="small"></p>
-  </div>
+<div class="box">
+  <h2 style="text-align:center;">تسجيل مطعم</h2>
+
+  <input id="email" placeholder="البريد الإلكتروني">
+  <input id="password" type="password" placeholder="كلمة السر">
+
+  <input id="restaurant_name" placeholder="اسم المطعم">
+  <input id="restaurant_image" placeholder="رابط صورة المطعم">
+  <input id="whatsapp" placeholder="رقم الواتساب (مثال +2136...)">
+
+  <button id="registerBtn">تسجيل</button>
+
+  <div class="msg" id="msg"></div>
+</div>
+
+<!-- مكتبة Supabase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script>
-  const SUPA_URL = "https://vhvmwshgzxunosucwrnz.supabase.co";
-  const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZodm13c2hnenh1bm9zdWN3cm56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMTg2OTIsImV4cCI6MjA3ODc5NDY5Mn0.ow3rgxsKBPY5Av-FX_z5URPO6gtdmnLyb7ZIR4IbFTU";
-  const supabase = supabaseJs.createClient(SUPA_URL, SUPA_KEY);
+  const supabase = supabase.createClient(
+    "https://vhvmwshgzxunosucwrnz.supabase.co",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZodm13c2hnenh1bm9zdWN3cm56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMTg2OTIsImV4cCI6MjA3ODc5NDY5Mn0.ow3rgxsKBPY5Av-FX_z5URPO6gtdmnLyb7ZIR4IbFTU"
+  );
 
-  // support token from query param
-  const urlParams = new URLSearchParams(window.location.search);
-  if(urlParams.get("token")) document.getElementById("token").value = urlParams.get("token");
+  const btn = document.getElementById("registerBtn");
+  const msg = document.getElementById("msg");
 
-  document.getElementById("registerBtn").addEventListener("click", async ()=>{
-    const token = document.getElementById("token").value.trim();
-    const owner_name = document.getElementById("owner_name").value.trim();
-    const owner_email = document.getElementById("owner_email").value.trim();
+  btn.addEventListener("click", async () => {
+    msg.innerText = "جاري التسجيل...";
+
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value.trim();
     const restaurant_name = document.getElementById("restaurant_name").value.trim();
     const restaurant_image = document.getElementById("restaurant_image").value.trim();
+    const whatsapp = document.getElementById("whatsapp").value.trim();
 
-    const msg = document.getElementById("msg");
-    if(!token || !owner_email || !restaurant_name){ msg.innerText = "عبي كل الحقول الضرورية"; return; }
+    if (!email || !password || !restaurant_name || !whatsapp) {
+      msg.innerText = "يرجى ملء الخانات المطلوبة.";
+      return;
+    }
 
-    // verify invite
-    const { data: invite, error: invErr } = await supabase.from("invites").select("*").eq("token",token).single();
-    if(invErr || !invite){ msg.innerText = "الرابك غير صالح"; console.error(invErr); return; }
-    if(invite.used){ msg.innerText = "هذا الرابك مستعمل"; return; }
+    // 1) إنشاء مستخدم (صاحب مطعم)
+    const { data: user, error: userErr } = await supabase
+      .from("users")
+      .insert({ email, password })
+      .select()
+      .single();
 
-    // create restaurant
-    const { data: restData, error: restErr } = await supabase.from("restaurants").insert([{
-      owner_email, owner_name, restaurant_name, restaurant_image_url: restaurant_image
-    }]).select().single();
-    if(restErr){ msg.innerText = "خطأ في التسجيل"; console.error(restErr); return; }
+    if (userErr) {
+      msg.innerText = "خطأ: " + userErr.message;
+      return;
+    }
 
-    // mark invite used
-    const { error: markErr } = await supabase.from("invites").update({used:true}).eq("token",token);
-    if(markErr) console.error("لم نتمكن من تحديث حالة الرابك", markErr);
+    // 2) إنشاء سجل المطعم
+    await supabase.from("restaurants").insert({
+      id: user.id,
+      restaurant_name,
+      restaurant_image,
+      whatsapp
+    });
 
-    msg.innerText = "تم التسجيل! يمكنك الآن الدخول إلى لوحة التحكم.";
-    // redirect to owner dashboard with restaurant id
-    setTimeout(()=> {
-      window.location.href = `owner.html?restaurant_id=${restData.id}`;
-    }, 1200);
+    msg.innerText = "تم التسجيل بنجاح ✔️";
   });
 </script>
+
 </body>
 </html>
