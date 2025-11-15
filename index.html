@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <title>RSali — طلب المأكولات</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: Tahoma, "Segoe UI", sans-serif; background:#fff8f0; margin:0; padding:0; }
+    header { text-align:center; padding:30px 10px; background:linear-gradient(90deg,#ffecd2,#fcb69f); }
+    header h1 { margin:0; font-size:28px; letter-spacing:1px; }
+    .banner { display:flex; gap:10px; justify-content:center; padding:20px; }
+    .banner img { width:220px; height:140px; object-fit:cover; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,0.1); }
+    .container { padding:20px; max-width:1100px; margin:0 auto; }
+    .btn { display:inline-block; padding:10px 18px; border-radius:8px; background:#ff6b35; color:white; border:none; cursor:pointer; font-weight:600}
+    .restaurants, .meals { margin-top:18px; display:flex; gap:12px; flex-wrap:wrap; }
+    .card { width:240px; background:white; border-radius:10px; padding:10px; box-shadow:0 4px 12px rgba(0,0,0,0.06); }
+    .card img { width:100%; height:140px; object-fit:cover; border-radius:8px; }
+    .small { font-size:13px; color:#666 }
+    .hidden { display:none }
+    .checkout { position:fixed; right:20px; bottom:20px; background:white; padding:14px; border-radius:10px; box-shadow:0 8px 30px rgba(0,0,0,0.12); width:320px; max-width:90vw }
+    input, textarea { width:100%; padding:8px; margin-top:8px; border-radius:6px; border:1px solid #ddd; box-sizing:border-box }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>RSali</h1>
+  <p class="small">أحلى الأطباق توصل لدارك — بدون تسجيل</p>
+</header>
+
+<div class="banner" aria-hidden="true">
+  <img src="https://images.unsplash.com/photo-1604908177522-8d6a3a4d1f66?q=80&w=800&auto=format&fit=crop&ixlib=rb-4.0.3&s=placeholder" alt="pizza" />
+  <img src="https://images.unsplash.com/photo-1550547660-d9450f859349?q=80&w=800&auto=format&fit=crop&ixlib=rb-4.0.3&s=placeholder" alt="burger" />
+  <img src="https://images.unsplash.com/photo-1600891964599-f61ba0e24092?q=80&w=800&auto=format&fit=crop&ixlib=rb-4.0.3&s=placeholder" alt="drinks" />
+</div>
+
+<div class="container">
+  <button id="showRestosBtn" class="btn">Resto</button>
+
+  <section id="restosSection" class="hidden">
+    <h3>قائمة المطاعم</h3>
+    <div id="restaurantsList" class="restaurants"></div>
+  </section>
+
+  <section id="mealsSection" class="hidden">
+    <h3 id="mealsTitle">قائمة المأكولات</h3>
+    <div id="mealsList" class="meals"></div>
+  </section>
+</div>
+
+<!-- Checkout small modal -->
+<div id="checkoutBox" class="checkout hidden" role="dialog" aria-modal="true">
+  <h4>تأكيد الطلب</h4>
+  <div id="cartSummary" style="font-size:14px; margin-top:6px"></div>
+
+  <input id="cust_name" placeholder="الاسم الكامل">
+  <input id="cust_phone" placeholder="رقم الهاتف">
+  <textarea id="cust_address" placeholder="العنوان (مكان التوصيل)"></textarea>
+  <button id="sendOrderBtn" class="btn">إرسال</button>
+  <div id="orderMsg" class="small" style="margin-top:8px"></div>
+</div>
+
+<script>
+  // --- إعداد Supabase ---
+  const SUPA_URL = "https://vhvmwshgzxunosucwrnz.supabase.co";
+  const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZodm13c2hnenh1bm9zdWN3cm56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMTg2OTIsImV4cCI6MjA3ODc5NDY5Mn0.ow3rgxsKBPY5Av-FX_z5URPO6gtdmnLyb7ZIR4IbFTU";
+  const supabase = supabaseJs.createClient(SUPA_URL, SUPA_KEY);
+
+  // DOM
+  const showRestosBtn = document.getElementById("showRestosBtn");
+  const restosSection = document.getElementById("restosSection");
+  const restaurantsList = document.getElementById("restaurantsList");
+  const mealsSection = document.getElementById("mealsSection");
+  const mealsList = document.getElementById("mealsList");
+  const mealsTitle = document.getElementById("mealsTitle");
+  const checkoutBox = document.getElementById("checkoutBox");
+  const cartSummary = document.getElementById("cartSummary");
+  const sendOrderBtn = document.getElementById("sendOrderBtn");
+  const orderMsg = document.getElementById("orderMsg");
+
+  let selectedRestaurant = null;
+  let cart = []; // {meal_id, name, qty, price}
+
+  showRestosBtn.addEventListener("click", async () => {
+    restosSection.classList.remove("hidden");
+    await loadRestaurants();
+  });
+
+  async function loadRestaurants(){
+    restaurantsList.innerHTML = "جاري التحميل...";
+    const { data, error } = await supabase.from("restaurants").select("*").order("created_at",{ascending:false});
+    if(error){ restaurantsList.innerText = "خطأ في تحميل المطاعم"; console.error(error); return; }
+    restaurantsList.innerHTML = "";
+    data.forEach(r => {
+      const el = document.createElement("div");
+      el.className = "card";
+      el.innerHTML = `
+        <img src="${r.restaurant_image_url || 'https://via.placeholder.com/400x300?text=RSali'}" alt="${r.restaurant_name}">
+        <h4>${r.restaurant_name}</h4>
+        <p class="small">${r.owner_name || ''}</p>
+        <button class="btn" data-id="${r.id}">فتح القائمة</button>
+      `;
+      restaurantsList.appendChild(el);
+    });
+    // event delegation for open menu buttons
+    restaurantsList.querySelectorAll("button[data-id]").forEach(b => {
+      b.addEventListener("click", () => openMenu(b.dataset.id));
+    });
+  }
+
+  async function openMenu(restaurantId){
+    selectedRestaurant = restaurantId;
+    mealsSection.classList.remove("hidden");
+    const r = await supabase.from("restaurants").select("restaurant_name").eq("id", restaurantId).single();
+    mealsTitle.innerText = `قائمة ${r.data.restaurant_name}`;
+    mealsList.innerHTML = "جاري التحميل...";
+    const { data, error } = await supabase.from("meals").select("*").eq("restaurant_id", restaurantId).order("created_at",{ascending:false});
+    if(error){ mealsList.innerText = "خطأ في تحميل القائمة"; console.error(error); return; }
+    mealsList.innerHTML = "";
+    data.forEach(m => {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        <img src="${m.image_url || 'https://via.placeholder.com/400x300?text=Meal'}" alt="${m.name}">
+        <h4>${m.name}</h4>
+        <p class="small">${m.description || ''}</p>
+        <p><strong>${Number(m.price).toFixed(2)} DA</strong></p>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn addBtn" data-id="${m.id}" data-name="${encodeURIComponent(m.name)}" data-price="${m.price}">شراء</button>
+        </div>
+      `;
+      mealsList.appendChild(card);
+    });
+    mealsList.querySelectorAll(".addBtn").forEach(b => {
+      b.addEventListener("click", () => {
+        const id = b.dataset.id;
+        const name = decodeURIComponent(b.dataset.name);
+        const price = parseFloat(b.dataset.price);
+        addToCart({meal_id: id, name, qty: 1, price});
+      });
+    });
+  }
+
+  function addToCart(item){
+    cart.push(item);
+    showCheckout();
+  }
+
+  function showCheckout(){
+    checkoutBox.classList.remove("hidden");
+    let total = 0;
+    const lines = cart.map(ci => {
+      total += (ci.price * ci.qty);
+      return `${ci.name} x${ci.qty} — ${ (ci.price * ci.qty).toFixed(2) } DA`;
+    });
+    cartSummary.innerHTML = `<div style="max-height:120px;overflow:auto">${lines.join("<br>")}</div><p style="margin-top:8px"><strong>المجموع: ${total.toFixed(2)} DA</strong></p>`;
+    sendOrderBtn.onclick = () => submitOrder(total);
+  }
+
+  async function submitOrder(total){
+    orderMsg.innerText = "جاري الإرسال...";
+    const name = document.getElementById("cust_name").value.trim();
+    const phone = document.getElementById("cust_phone").value.trim();
+    const address = document.getElementById("cust_address").value.trim();
+    if(!name || !phone || !address){ orderMsg.innerText = "أكمِل البيانات رجاءً"; return; }
+    if(!selectedRestaurant){ orderMsg.innerText = "اختر مطعماً أولاً"; return; }
+
+    // 1) create order
+    const { data: orderData, error: orderErr } = await supabase.from("orders").insert([{
+      restaurant_id: selectedRestaurant,
+      customer_name: name,
+      customer_phone: phone,
+      delivery_address: address,
+      total: total
+    }]).select().single();
+
+    if(orderErr){ orderMsg.innerText = "خطأ في إنشاء الطلب"; console.error(orderErr); return; }
+
+    const orderId = orderData.id;
+
+    // 2) create order_items
+    const itemsToInsert = cart.map(ci => ({
+      order_id: orderId,
+      meal_id: ci.meal_id,
+      meal_name: ci.name,
+      quantity: ci.qty,
+      unit_price: ci.price
+    }));
+
+    const { error: itemsErr } = await supabase.from("order_items").insert(itemsToInsert);
+    if(itemsErr){ orderMsg.innerText = "خطأ في حفظ تفاصيل الطلب"; console.error(itemsErr); return; }
+
+    // 3) create notification row for the restaurant (owner will see it realtime)
+    const { error: notifErr } = await supabase.from("notifications").insert([{
+      restaurant_id: selectedRestaurant,
+      order_id: orderId,
+      message: `طلب جديد من ${name} — ${phone}`
+    }]);
+    if(notifErr){ console.error("notifErr", notifErr); }
+
+    // success
+    orderMsg.innerText = "تم إرسال الطلب! سيصلكم تأكيد قريباً.";
+    // clear cart & form
+    cart = [];
+    document.getElementById("cust_name").value = "";
+    document.getElementById("cust_phone").value = "";
+    document.getElementById("cust_address").value = "";
+    setTimeout(()=> { checkoutBox.classList.add("hidden"); orderMsg.innerText = ""; }, 2500);
+  }
+
+  // OPTIONAL: Load restaurants automatically on page load if you want
+  // loadRestaurants();
+</script>
+</body>
+</html>
